@@ -15,15 +15,14 @@ jobs:
       - name: Clone LineageOS 22.2 Kernel
         run: |
           git clone https://github.com/LineageOS/android_kernel_oneplus_msm8998.git -b lineage-22.2 --depth=1 kernel
-          cd kernel
 
       - name: Integrate KernelSU
         run: |
           cd kernel
           curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -s v0.9.5
-          echo "CONFIG_KPROBES=y" >> arch/arm64/configs/lineageos_dumpling_defconfig
-          echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/lineageos_dumpling_defconfig
-          echo "CONFIG_KPROBE_EVENTS=y" >> arch/arm64/configs/lineageos_dumpling_defconfig
+          echo "CONFIG_KPROBES=y" >> arch/arm64/configs/lineage_oneplus5_defconfig
+          echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/lineage_oneplus5_defconfig
+          echo "CONFIG_KPROBE_EVENTS=y" >> arch/arm64/configs/lineage_oneplus5_defconfig
 
       - name: Build Kernel
         run: |
@@ -31,8 +30,8 @@ jobs:
           export ARCH=arm64
           export SUBARCH=arm64
           export CROSS_COMPILE=aarch64-linux-gnu-
-          make lineageos_dumpling_defconfig
-          make -j$(nproc) CC=clang
+          make lineage_oneplus5_defconfig
+          make -j$(nproc) CC=clang KCFLAGS="-w" Image.gz-dtb
 
       - name: Package with AnyKernel3
         run: |
