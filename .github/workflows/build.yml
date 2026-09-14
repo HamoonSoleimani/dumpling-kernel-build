@@ -10,57 +10,60 @@ jobs:
       - name: Install Build Dependencies
         run: |
           sudo apt update
-          sudo apt install -y git build-essential bc bison flex libssl-dev libelf-dev clang lld gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi
+          sudo apt install -y git build-essential bc bison flex libssl-dev libelf-dev clang lld gcc-aarch64-linux-gnu gcc-arm-linux-gnueabi zip
 
       - name: Clone LineageOS 22.2 Kernel
         run: |
           git clone https://github.com/LineageOS/android_kernel_oneplus_msm8998.git -b lineage-22.2 --depth=1 kernel
 
-      - name: Integrate KernelSU
+      - name: Integrate KernelSU-Next (Legacy 4.4 Branch)
         run: |
           cd kernel
-          # We use the main branch for the latest legacy 4.4 linking fixes
-          curl -LSs "https://raw.githubusercontent.com/tiann/KernelSU/main/kernel/setup.sh" | bash -
-          
-          # Force enable KSU and KPROBES in the hardware profile
+          # Use KernelSU-Next legacy branch designed specifically for kernel 4.4
+          curl -LSs "https://raw.githubusercontent.com/KernelSU-Next/KernelSU-Next/next/kernel/setup.sh" | bash -s legacy
+
+          # Enable required kernel flags in defconfig
           echo "CONFIG_KSU=y" >> arch/arm64/configs/lineage_oneplus5_defconfig
           echo "CONFIG_KPROBES=y" >> arch/arm64/configs/lineage_oneplus5_defconfig
           echo "CONFIG_HAVE_KPROBES=y" >> arch/arm64/configs/lineage_oneplus5_defconfig
           echo "CONFIG_KPROBE_EVENTS=y" >> arch/arm64/configs/lineage_oneplus5_defconfig
+          echo "CONFIG_OVERLAY_FS=y" >> arch/arm64/configs/lineage_oneplus5_defconfig
 
-      - name: Build Kernel
+      - name: Build Kernel Image
         run: |
           cd kernel
           export ARCH=arm64
           export SUBARCH=arm64
-          
-          # Use both 64-bit and 32-bit compilers (required for 4.4)
-          export CROSS_COMPILE=aarch64-linux-gnu-
-          export CROSS_COMPILE_ARM32=arm-linux-gnueabi-
-          
-          # Force the use of the full LLVM toolchain to prevent linker crashes
-          export CC=clang
-          export LD=ld.lld
-          export AR=llvm-ar
-          export NM=llvm-nm
-          export OBJCOPY=llvm-objcopy
-          export OBJDUMP=llvm-objdump
-          export STRIP=llvm-strip
-          
-          make lineage_oneplus5_defconfig
-          # KCFLAGS="-w" suppresses warnings so they don't break the build
-          make -j$(nproc) KCFLAGS="-w" Image.gz-dtb
 
-      - name: Package with AnyKernel3
+          # 1. Generate config using Clang
+          make ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            lineage_oneplus5_defconfig
+
+          # 2. Compile kernel image
+          make -j$(nproc) ARCH=arm64 \
+            CC=clang \
+            CLANG_TRIPLE=aarch64-linux-gnu- \
+            CROSS_COMPILE=aarch64-linux-gnu- \
+            CROSS_COMPILE_ARM32=arm-linux-gnueabi- \
+            KCFLAGS="-w" \
+            Image.gz-dtb
+
+      - name: Package Flashable AnyKernel3 ZIP
         run: |
           git clone https://github.com/osm0sis/AnyKernel3.git
           cp kernel/arch/arm64/boot/Image.gz-dtb AnyKernel3/
           cd AnyKernel3
           sed -i 's/device.name1=.*/device.name1=dumpling/' anykernel.sh
           sed -i 's/device.name2=.*/device.name2=cheeseburger/' anykernel.sh
+          sed -i 's/device.name3=.*/device.name3=OnePlus5T/' anykernel.sh
+          sed -i 's/device.name4=.*/device.name4=OnePlus5/' anykernel.sh
           zip -r9 ../Lineage22_dumpling_KernelSU.zip * -x .git README.md *placeholder
 
-      - name: Upload Flashable ZIP
+      - name: Upload Finished Kernel ZIP
         uses: actions/upload-artifact@v4
         with:
           name: KernelSU-Lineage22-dumpling
